@@ -5,19 +5,23 @@ import android.app.Application
 import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DonutLarge
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
@@ -26,6 +30,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.scratchmap.ui.glassmorphism
 import com.example.scratchmap.ui.theme.ScratchMapTheme
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -51,7 +56,8 @@ fun ScratchMapApp() {
     val context = LocalContext.current
     val application = context.applicationContext as Application
     val mainViewModel: MainViewModel = viewModel(factory = ViewModelFactory(application))
-    val visitedLocations by mainViewModel.allVisitedLocations.collectAsState()
+
+    val mapView = remember { MapView(context) }
 
     var hasPermissions by remember {
         mutableStateOf(
@@ -73,33 +79,92 @@ fun ScratchMapApp() {
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (hasPermissions) {
-            MapViewComposable { location ->
-                mainViewModel.updateLocation(location.latitude, location.longitude)
-            }
+            MapViewComposable(
+                mapView = mapView,
+                onLocationChanged = { location ->
+                    mainViewModel.updateLocation(location.latitude, location.longitude)
+                }
+            )
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("Location permission is required to use this app.")
             }
         }
 
-        // Display the number of visited locations at the bottom
-        Column(
+        BottomButtons(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .background(Color.Black.copy(alpha = 0.5f))
-                .padding(8.dp)
-        ) {
-            Text("Visited locations: ${visitedLocations.size}", color = Color.White)
-        }
+                .padding(bottom = 32.dp),
+            onMyLocationClick = {
+                val myLocationOverlay = mapView.overlays.firstOrNull { it is MyLocationNewOverlay } as? MyLocationNewOverlay
+                myLocationOverlay?.myLocation?.let {
+                    mapView.controller.animateTo(it)
+                }
+            },
+            onProgressClick = {
+                Toast.makeText(context, "Progress screen coming soon!", Toast.LENGTH_SHORT).show()
+            },
+            onSettingsClick = {
+                Toast.makeText(context, "Settings screen coming soon!", Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 }
 
 @Composable
-fun MapViewComposable(onLocationChanged: (Location) -> Unit) {
-    val context = LocalContext.current
-    val mapView = remember {
-        MapView(context)
+fun BottomButtons(
+    modifier: Modifier = Modifier,
+    onMyLocationClick: () -> Unit,
+    onProgressClick: () -> Unit,
+    onSettingsClick: () -> Unit
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // My Location Button
+        IconButton(
+            onClick = onMyLocationClick,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .glassmorphism(shape = CircleShape)
+        ) {
+            Icon(Icons.Filled.MyLocation, contentDescription = "My Location")
+        }
+
+        // Progress Button
+        IconButton(
+            onClick = onProgressClick,
+            modifier = Modifier
+                .size(80.dp)
+                .clip(CircleShape)
+                .glassmorphism(shape = CircleShape)
+        ) {
+            Icon(Icons.Filled.DonutLarge, contentDescription = "Progress", modifier = Modifier.size(48.dp))
+        }
+
+        // Settings Button
+        IconButton(
+            onClick = onSettingsClick,
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .glassmorphism(shape = CircleShape)
+        ) {
+            Icon(Icons.Filled.Settings, contentDescription = "Settings")
+        }
     }
+}
+
+
+@Composable
+fun MapViewComposable(
+    mapView: MapView,
+    onLocationChanged: (Location) -> Unit
+) {
+    val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
 
     DisposableEffect(lifecycle) {
